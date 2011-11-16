@@ -1,0 +1,21 @@
+Installing PyLSF
+================
+
+Requirements
+------------
+
+You will need Python 2.3 or later.
+
+You will need Pyrex 0.9.5.1 or later.
+
+.. _Pyrex: http://www.cosc.canterbury.ac.nz/~greg/python/Pyrex/
+
+You will need Platform Computing LSF 6.2/7.0
+
+.. _LSF: http://www.platform.com
+
+Installation
+------------
+
+.. _python setup.py build
+.. _python setup.py install
