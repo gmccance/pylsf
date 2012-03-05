@@ -23,6 +23,7 @@ cdef extern from "stdlib.h":
 cdef extern from "stdio.h":
     ctypedef struct FILE
     FILE *fopen(char *filename, char *mode)
+    int fclose(FILE *fp)
 
 cdef extern from "Python.h":
     object PyCObject_FromVoidPtr(void* cobj, void (*destr)(void *))
@@ -863,6 +864,11 @@ cdef extern from "lsf/lsbatch.h":
       char   *warningAction
       char   *chargedSAAP
       char   *licenseProject
+      # According to /usr/include/lsf/lsbatch.h, we also have:
+      char   *app
+      char   *postExecCmd
+      int    runtimeEstimation
+      char   *jgroup
 
     cdef struct calendarLog:
       int    options
@@ -4344,9 +4350,27 @@ cdef class lsb_geteventrec:
         self.fp
         self.__open()
 
+    def __dealloc__(self):
+        # Pyrex expects __dealloc__(), not __del__()
+
+        fclose(self.fp)
+
+        # Whatever c_lsb_geteventrec() returns shouldn't be freed since it's
+        # static, not malloc'd.
+
     def __open(self):
         self.fp = fopen(self.eventFile,'r')
-        self.record = c_lsb_geteventrec(self.fp, &self.lineNum)
+        #self.record = c_lsb_geteventrec(self.fp, &self.lineNum)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        a = self.read()
+        if not a:
+            raise StopIteration
+        else:
+            return a
 
     def read(self):
 
@@ -4476,64 +4500,89 @@ cdef class lsb_geteventrec:
                      self.mbdUnfulfil.miscOpts4PendSig]
            elif self.record.type == 10: # EVENT_JOB_FINISH
              self.finishJob = &(self.record.eventLog.jobFinishLog)
-             hosts = []
+             askedHosts = []
              for i from 0 <= i < self.finishJob.numAskedHosts:
-                hosts.append(self.finishJob.askedHosts[i])
-             exHosts = []
+                askedHosts.append(self.finishJob.askedHosts[i])
+             execHosts = []
              for i from 0 <= i < self.finishJob.numExHosts:
-                exHosts.append(self.finishJob.execHosts[i])
-             return [self.record.type,
-                     "JOB_FINISH",
-                     self.record.version,
-                     self.record.eventTime,
-                     self.finishJob.jobId,
-                     self.finishJob.userId,
-                     self.finishJob.userName,
-                     self.finishJob.options,
-                     self.finishJob.numProcessors,
-                     self.finishJob.jStatus,
-                     self.finishJob.submitTime,
-                     self.finishJob.beginTime,
-                     self.finishJob.termTime,
-                     self.finishJob.startTime,
-                     self.finishJob.endTime,
-                     self.finishJob.queue,
-                     self.finishJob.resReq,
-                     self.finishJob.fromHost,
-                     self.finishJob.cwd,
-                     self.finishJob.inFile,
-                     self.finishJob.outFile,
-                     self.finishJob.errFile,
-                     self.finishJob.inFileSpool,
-                     self.finishJob.commandSpool,
-                     self.finishJob.jobFile,
-                     hosts,
-                     self.finishJob.hostFactor,
-                     exHosts,
-                     self.finishJob.cpuTime,
-                     self.finishJob.jobName,
-                     self.finishJob.command,
-                     #lsfRusage lsfRusage,
-                     self.finishJob.dependCond,
-                     self.finishJob.timeEvent,
-                     self.finishJob.preExecCmd,
-                     self.finishJob.mailUser,
-                     self.finishJob.projectName,
-                     self.finishJob.exitStatus,
-                     self.finishJob.maxNumProcessors,
-                     self.finishJob.loginShell,
-                     self.finishJob.idx,
-                     self.finishJob.maxRMem,
-                     self.finishJob.maxRSwap,
-                     self.finishJob.rsvId,
-                     self.finishJob.sla,
-                     self.finishJob.exceptMask,
-                     self.finishJob.additionalInfo,
-                     self.finishJob.exitInfo,
-                     self.finishJob.warningTimePeriod,
-                     self.finishJob.warningAction,
-                     self.finishJob.chargedSAAP,
-                     self.finishJob.licenseProject]
+                execHosts.append(self.finishJob.execHosts[i])
+
+             return {'type':              self.record.type,
+                     'eventType':         'JOB_FINISH',
+                     'version':           self.record.version,
+                     'eventTime':         self.record.eventTime,
+                     'jobId':             self.finishJob.jobId,
+                     'userId':            self.finishJob.userId,
+                     'userName':          self.finishJob.userName,
+                     'options':           self.finishJob.options,
+                     'numProcessors':     self.finishJob.numProcessors,
+                     'jStatus':           self.finishJob.jStatus,
+                     'submitTime':        self.finishJob.submitTime,
+                     'beginTime':         self.finishJob.beginTime,
+                     'termTime':          self.finishJob.termTime,
+                     'startTime':         self.finishJob.startTime,
+                     'endTime':           self.finishJob.endTime,
+                     'queue':             self.finishJob.queue,
+                     'resReq':            self.finishJob.resReq,
+                     'fromHost':          self.finishJob.fromHost,
+                     'cwd':               self.finishJob.cwd,
+                     'inFile':            self.finishJob.inFile,
+                     'outFile':           self.finishJob.outFile,
+                     'errFile':           self.finishJob.errFile,
+                     'inFileSpool':       self.finishJob.inFileSpool,
+                     'commandSpool':      self.finishJob.commandSpool,
+                     'jobFile':           self.finishJob.jobFile,
+                     'numAskedHosts':     self.finishJob.numAskedHosts,
+                     'askedHosts':        askedHosts,
+                     'hostFactor':        self.finishJob.hostFactor,
+                     'numExHosts':        self.finishJob.numExHosts,
+                     'execHosts':         execHosts,
+                     'cpuTime':           self.finishJob.cpuTime,
+                     'jobName':           self.finishJob.jobName,
+                     'command':           self.finishJob.command,
+                     'ru_utime':          self.finishJob.lsfRusage.ru_utime,
+                     'ru_stime':          self.finishJob.lsfRusage.ru_stime,
+                     'ru_maxrss':         self.finishJob.lsfRusage.ru_maxrss,
+                     'ru_ixrss':          self.finishJob.lsfRusage.ru_ixrss,
+                     'ru_ismrss':         self.finishJob.lsfRusage.ru_ismrss,
+                     'ru_idrss':          self.finishJob.lsfRusage.ru_idrss,
+                     'ru_isrss':          self.finishJob.lsfRusage.ru_isrss,
+                     'ru_minflt':         self.finishJob.lsfRusage.ru_minflt,
+                     'ru_majflt':         self.finishJob.lsfRusage.ru_majflt,
+                     'ru_nswap':          self.finishJob.lsfRusage.ru_nswap,
+                     'ru_inblock':        self.finishJob.lsfRusage.ru_inblock,
+                     'ru_oublock':        self.finishJob.lsfRusage.ru_oublock,
+                     'ru_ioch':           self.finishJob.lsfRusage.ru_ioch,
+                     'ru_msgsnd':         self.finishJob.lsfRusage.ru_msgsnd,
+                     'ru_msgrcv':         self.finishJob.lsfRusage.ru_msgrcv,
+                     'ru_nsignals':       self.finishJob.lsfRusage.ru_nsignals,
+                     'ru_nvcsw':          self.finishJob.lsfRusage.ru_nvcsw,
+                     'ru_nivcsw':         self.finishJob.lsfRusage.ru_nivcsw,
+                     'ru_exutime':        self.finishJob.lsfRusage.ru_exutime,
+                     'dependCond':        self.finishJob.dependCond,
+                     'timeEvent':         self.finishJob.timeEvent,
+                     'preExecCmd':        self.finishJob.preExecCmd,
+                     'mailUser':          self.finishJob.mailUser,
+                     'projectName':       self.finishJob.projectName,
+                     'exitStatus':        self.finishJob.exitStatus,
+                     'maxNumProcessors':  self.finishJob.maxNumProcessors,
+                     'loginShell':        self.finishJob.loginShell,
+                     'idx':               self.finishJob.idx,
+                     'maxRMem':           self.finishJob.maxRMem,
+                     'maxRSwap':          self.finishJob.maxRSwap,
+                     'rsvId':             self.finishJob.rsvId,
+                     'sla':               self.finishJob.sla,
+                     'exceptMask':        self.finishJob.exceptMask,
+                     'additionalInfo':    self.finishJob.additionalInfo,
+                     'exitInfo':          self.finishJob.exitInfo,
+                     'warningTimePeriod': self.finishJob.warningTimePeriod,
+                     'warningAction':     self.finishJob.warningAction,
+                     'chargedSAAP':       self.finishJob.chargedSAAP,
+                     'licenseProject':    self.finishJob.licenseProject,
+                     'app':               self.finishJob.app,
+                     'postExecCmd':       self.finishJob.postExecCmd,
+                     'runtimeEstimation': self.finishJob.runtimeEstimation,
+                     'jgroup':            self.finishJob.jgroup}
            elif self.record.type == 11: # EVENT_LOAD_EXEC
              return [self.record.type,
                      "LOAD_EXEC"]
