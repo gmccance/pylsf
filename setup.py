@@ -28,7 +28,7 @@ lsf_libdir = os.getenv("LSF_LIBDIR")
 try:
     lsf_major = int(os.getenv("LSF_VERSION").split('.')[0])
 except AttributeError:
-    lsf_major = None
+    lsf_major = 0
 if (lsf_libdir):
 
   LSF_VERSION = re.compile(r'^(?P<lsf_dir>.*lsf|.*lsfhpc)/(?P<lsf_major>\d+).(?P<lsf_minor>\d+)/.*lib$')
@@ -38,7 +38,7 @@ if (lsf_libdir):
   if line:
 
     lsf_incdir = line.group("lsf_dir") + "/include"
-    if lsf_major == None:
+    if not lsf_major:
         line = LSF_VERSION.match(lsf_libdir)
         if line:
           if line.group("lsf_major"):
